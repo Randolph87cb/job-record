@@ -1,0 +1,234 @@
+<Window x:Class="JobRecord.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:core="clr-namespace:JobRecord.Core.Enums;assembly=JobRecord.Core"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="工作时间记录"
+        Width="460"
+        MinWidth="320"
+        MinHeight="56"
+        SizeToContent="Height"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="NoResize"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Loaded="OnLoaded"
+        Closing="OnClosing"
+        MouseEnter="OnMouseEnteredWindow"
+        MouseLeave="OnMouseLeftWindow">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+
+        <Style x:Key="CompactHiddenStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCompact}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="TaskCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White" />
+            <Setter Property="BorderBrush" Value="#FFD9E4EA" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                    <Setter Property="Background" Value="#FFEAF7FD" />
+                    <Setter Property="BorderBrush" Value="#FF6BA8C7" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#F5FBFF"
+            CornerRadius="16"
+            BorderBrush="#CCB8D8E5"
+            BorderThickness="1"
+            Padding="10">
+        <StackPanel>
+            <Border Background="#FFF8FAFC"
+                    CornerRadius="12"
+                    Padding="8"
+                    BorderBrush="#FFE1ECF2"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Margin="0,0,8,0"
+                            CornerRadius="8"
+                            Background="#FFEFF5F8"
+                            Cursor="SizeAll"
+                            MouseLeftButtonDown="OnDragHandleMouseLeftButtonDown">
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="#FF70818B"
+                                   FontWeight="Bold"
+                                   Text="::" />
+                    </Border>
+
+                    <Border Grid.Column="1"
+                            Background="Transparent"
+                            MouseLeftButtonDown="OnHeaderContentMouseLeftButtonDown"
+                            MouseLeftButtonUp="OnHeaderContentMouseLeftButtonUp">
+                        <StackPanel VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <Border Background="#FFE95D5D"
+                                        CornerRadius="8"
+                                        Padding="6,2"
+                                        Margin="0,0,8,0"
+                                        Visibility="{Binding HasCurrentTask, Converter={StaticResource BoolToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding CurrentPriorityText}" Foreground="White" FontWeight="Bold" />
+                                </Border>
+                                <TextBlock Text="{Binding CurrentTaskTitle}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding StatusText}"
+                                       FontSize="11"
+                                       Foreground="#FF5E6A71"
+                                       Style="{StaticResource CompactHiddenStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Grid.Column="2"
+                               Margin="18,0,10,0"
+                               VerticalAlignment="Center"
+                               FontFamily="Consolas"
+                               FontWeight="Bold"
+                               Text="{Binding CurrentDurationText}" />
+
+                    <Button Grid.Column="3"
+                            Margin="0,0,8,0"
+                            Padding="10,4"
+                            Content="{Binding WorkActionText}"
+                            Command="{Binding ToggleWorkStateCommand}"
+                            Style="{StaticResource CompactHiddenStyle}" />
+
+                    <Button Grid.Column="4"
+                            Padding="10,4"
+                            Content="完成"
+                            Command="{Binding CompleteCurrentTaskCommand}"
+                            Style="{StaticResource CompactHiddenStyle}" />
+                </Grid>
+            </Border>
+
+            <Border Margin="0,8,0,0"
+                    Background="#FFF8FAFC"
+                    CornerRadius="12"
+                    Padding="10"
+                    BorderBrush="#FFE1ECF2"
+                    BorderThickness="1"
+                    Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock Text="{Binding TodaySummaryText}" Margin="0,0,0,10" Foreground="#FF5E6A71" />
+
+                    <Border Background="White"
+                            BorderBrush="#FFD9E4EA"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10"
+                            Margin="0,0,0,10">
+                        <StackPanel>
+                            <TextBlock Text="快速开始" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="88" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBox Grid.Column="0"
+                                         Margin="0,0,8,0"
+                                         VerticalContentAlignment="Center"
+                                         Text="{Binding NewTaskTitle, UpdateSourceTrigger=PropertyChanged}" />
+
+                                <ComboBox Grid.Column="1"
+                                          Margin="0,0,8,0"
+                                          SelectedValue="{Binding NewTaskPriority}"
+                                          SelectedValuePath="Tag">
+                                    <ComboBoxItem Content="P1" Tag="{x:Static core:TaskPriority.P1}" />
+                                    <ComboBoxItem Content="P2" Tag="{x:Static core:TaskPriority.P2}" />
+                                    <ComboBoxItem Content="P3" Tag="{x:Static core:TaskPriority.P3}" />
+                                </ComboBox>
+
+                                <Button Grid.Column="2"
+                                        Padding="10,4"
+                                        Content="新建并开始"
+                                        Command="{Binding CreateTaskAndStartCommand}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="White"
+                            BorderBrush="#FFD9E4EA"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="10">
+                        <StackPanel>
+                            <TextBlock Text="任务列表" FontWeight="SemiBold" Margin="0,0,0,8" />
+                            <ItemsControl ItemsSource="{Binding Tasks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,6"
+                                                Padding="8"
+                                                CornerRadius="8"
+                                                Style="{StaticResource TaskCardStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding PriorityText}"
+                                                                   FontWeight="Bold"
+                                                                   Foreground="#FF1D556E"
+                                                                   Margin="0,0,8,0" />
+                                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                                    </StackPanel>
+                                                    <TextBlock Text="{Binding StatusText}" FontSize="11" Foreground="#FF5E6A71" />
+                                                    <TextBlock Text="{Binding DurationText}" FontFamily="Consolas" FontSize="11" />
+                                                    <TextBlock Text="{Binding EstimateText}" FontSize="11" Foreground="#FF70818B" />
+                                                </StackPanel>
+
+                                                <Button Grid.Column="1"
+                                                        Margin="8,0,8,0"
+                                                        Padding="10,4"
+                                                        Content="{Binding PrimaryActionText}"
+                                                        IsEnabled="{Binding CanPrimaryAction}"
+                                                        Command="{Binding DataContext.PrimaryTaskActionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+
+                                                <Button Grid.Column="2"
+                                                        Padding="10,4"
+                                                        Content="完成"
+                                                        IsEnabled="{Binding CanComplete}"
+                                                        Command="{Binding DataContext.CompleteTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</Window>
