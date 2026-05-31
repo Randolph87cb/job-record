@@ -4,6 +4,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>..\..\assets\branding\JobRecord.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

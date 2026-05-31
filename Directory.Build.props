@@ -4,5 +4,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>12.0</LangVersion>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Company>Randolph87cb</Company>
+    <Authors>Randolph87cb</Authors>
+    <Product>工作时间记录</Product>
+    <AssemblyTitle>工作时间记录</AssemblyTitle>
+    <Description>Windows 顶部/侧边悬浮工作时间记录工具</Description>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Version Condition="'$(Version)' == ''">0.1.0-local</Version>
+    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">1.0.0.0</AssemblyVersion>
+    <FileVersion Condition="'$(FileVersion)' == ''">1.0.0.0</FileVersion>
+    <InformationalVersion Condition="'$(InformationalVersion)' == ''">0.1.0-local</InformationalVersion>
   </PropertyGroup>
 </Project>
