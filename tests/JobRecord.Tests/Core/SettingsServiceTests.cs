@@ -9,6 +9,22 @@ namespace JobRecord.Tests.Core;
 public sealed class SettingsServiceTests
 {
     [Fact]
+    public async Task SaveSettingsAsync_ShouldPreserveNonTopDockMode()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 5, 29, 14, 0, 0, TimeSpan.Zero));
+        using var db = TestDbContextFactory.CreateInMemory();
+        var service = new SettingsService(db.Context, clock);
+
+        var settings = await service.GetSettingsAsync();
+        settings.DockMode = DockMode.RightEdge;
+
+        await service.SaveSettingsAsync(settings);
+
+        var storedSettings = await service.GetSettingsAsync();
+        storedSettings.DockMode.Should().Be(DockMode.RightEdge);
+    }
+
+    [Fact]
     public async Task SettingsService_ShouldPersistVisibilityExpandedAndWindowPlacement()
     {
         var clock = new TestClock(new DateTimeOffset(2026, 5, 29, 14, 0, 0, TimeSpan.Zero));
@@ -25,12 +41,12 @@ public sealed class SettingsServiceTests
         await service.SaveSettingsAsync(settings);
         await service.SetBarVisibilityAsync(false);
         await service.SetExpandedStateAsync(true);
-        await service.SaveWindowPlacementAsync(222, 18);
+        await service.SaveWindowPlacementAsync(DockMode.LeftEdge, 222, 18);
 
         var storedSettings = await service.GetSettingsAsync();
         var runtimeState = await service.GetRuntimeStateAsync();
 
-        storedSettings.DockMode.Should().Be(DockMode.TopCenter);
+        storedSettings.DockMode.Should().Be(DockMode.LeftEdge);
         storedSettings.WindowLeft.Should().Be(222);
         storedSettings.WindowTop.Should().Be(18);
         runtimeState.IsBarVisible.Should().BeFalse();

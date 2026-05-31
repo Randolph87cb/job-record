@@ -29,7 +29,7 @@ public sealed class SettingsService(IJobRecordDbContext dbContext, IClock clock)
     public async Task<AppSettings> SaveSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default)
     {
         var existing = await GetSettingsAsync(cancellationToken);
-        existing.DockMode = EnforceSupportedDockMode(settings.DockMode);
+        existing.DockMode = settings.DockMode;
         existing.BarWidth = settings.BarWidth;
         existing.BarHeight = settings.BarHeight;
         existing.MarginTop = settings.MarginTop;
@@ -69,9 +69,10 @@ public sealed class SettingsService(IJobRecordDbContext dbContext, IClock clock)
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task SaveWindowPlacementAsync(double left, double top, CancellationToken cancellationToken = default)
+    public async Task SaveWindowPlacementAsync(Enums.DockMode dockMode, double left, double top, CancellationToken cancellationToken = default)
     {
         var settings = await GetSettingsAsync(cancellationToken);
+        settings.DockMode = dockMode;
         settings.WindowLeft = left;
         settings.WindowTop = top;
         settings.UpdatedAt = clock.Now;
@@ -102,7 +103,4 @@ public sealed class SettingsService(IJobRecordDbContext dbContext, IClock clock)
         dbContext.Add(runtimeState);
         return runtimeState;
     }
-
-    private static Enums.DockMode EnforceSupportedDockMode(Enums.DockMode dockMode)
-        => dockMode == Enums.DockMode.TopCenter ? dockMode : Enums.DockMode.TopCenter;
 }

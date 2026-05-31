@@ -1,4 +1,6 @@
 using JobRecord.Core.Enums;
+using JobRecord.App.Styling;
+using Brush = System.Windows.Media.Brush;
 
 namespace JobRecord.App.ViewModels;
 
@@ -13,6 +15,11 @@ public sealed class TaskListItemViewModel : ObservableObject
     public required string EstimateText { get; init; }
     public bool IsCurrent { get; init; }
     public string PriorityText => Priority.ToString();
+    public Brush PriorityBackground => UiPalette.GetPriorityBackground(Priority);
+    public Brush PriorityForeground => UiPalette.GetPriorityForeground(Priority);
+    public Brush PrioritySoftBackground => UiPalette.GetPrioritySoftBackground(Priority);
+    public Brush StatusBackground => UiPalette.GetStatusBackground(Status);
+    public Brush StatusForeground => UiPalette.GetStatusForeground(Status);
     public string PrimaryActionText => Status switch
     {
         TaskStatus.Running => "暂停",
