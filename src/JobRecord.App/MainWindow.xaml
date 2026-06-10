@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:core="clr-namespace:JobRecord.Core.Enums;assembly=JobRecord.Core"
+        xmlns:viewModels="clr-namespace:JobRecord.App.ViewModels"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:effects="clr-namespace:System.Windows.Media.Effects;assembly=PresentationCore"
         mc:Ignorable="d"
@@ -244,6 +245,24 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="VisibleWhenEditingStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="VisibleWhenViewingStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Visible" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <DataTemplate x:Key="TaskListItemTemplate">
             <Border Margin="0,0,0,8"
                     Padding="10"
@@ -278,9 +297,28 @@
                         </StackPanel>
 
                         <TextBlock Text="{Binding Title}"
-                                   Style="{StaticResource TitleTextStyle}"
                                    FontSize="14"
-                                   Margin="0,0,0,5" />
+                                   Margin="0,0,0,5"
+                                   TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TitleTextStyle}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+
+                        <TextBox Margin="0,0,0,6"
+                                 Padding="8,5"
+                                 Background="{StaticResource SurfaceMutedBrush}"
+                                 BorderBrush="{StaticResource BorderBrush}"
+                                 BorderThickness="1"
+                                 Text="{Binding EditableTitle, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource VisibleWhenEditingStyle}" />
 
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="{Binding DurationText}"
@@ -294,21 +332,71 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Center"
+                                Orientation="Vertical"
+                                VerticalAlignment="Top"
                                 Margin="12,0,0,0">
-                        <Button Margin="0,0,8,0"
+                        <Button Margin="0,0,0,6"
                                 MinWidth="56"
-                                Style="{StaticResource SecondaryButtonStyle}"
                                 Content="{Binding PrimaryActionText}"
                                 IsEnabled="{Binding CanPrimaryAction}"
                                 Command="{Binding DataContext.PrimaryTaskActionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                CommandParameter="{Binding}" />
+                                CommandParameter="{Binding}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Margin="0,0,0,6"
+                                MinWidth="56"
+                                Content="改名"
+                                Command="{Binding DataContext.BeginEditTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButtonStyle}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
                         <Button MinWidth="56"
-                                Style="{StaticResource GhostButtonStyle}"
                                 Content="完成"
                                 IsEnabled="{Binding CanComplete}"
                                 Command="{Binding DataContext.CompleteTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource GhostButtonStyle}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        <Button Margin="0,0,0,6"
+                                MinWidth="56"
+                                Content="保存"
+                                IsEnabled="{Binding CanSaveEdit}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibilityConverter}}"
+                                Command="{Binding DataContext.SaveTaskEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}" />
+                        <Button MinWidth="56"
+                                Style="{StaticResource GhostButtonStyle}"
+                                Content="取消"
+                                Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibilityConverter}}"
+                                Command="{Binding DataContext.CancelEditTaskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                 CommandParameter="{Binding}" />
                     </StackPanel>
                 </Grid>
@@ -473,25 +561,23 @@
                                     <TextBlock Text="快速开始"
                                                Style="{StaticResource TitleTextStyle}"
                                                FontSize="13"
-                                               Margin="0,0,0,10" />
+                                               Margin="0,0,0,8" />
+                                    <TextBox Margin="0,0,0,8"
+                                             MinHeight="34"
+                                             VerticalContentAlignment="Center"
+                                             Padding="8,5"
+                                             Background="{StaticResource SurfaceMutedBrush}"
+                                             BorderBrush="{StaticResource BorderBrush}"
+                                             BorderThickness="1"
+                                             Text="{Binding NewTaskTitle, UpdateSourceTrigger=PropertyChanged}" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="90" />
+                                            <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBox Grid.Column="0"
-                                                 Margin="0,0,8,0"
-                                                 MinHeight="34"
-                                                 VerticalContentAlignment="Center"
-                                                 Padding="8,5"
-                                                 Background="{StaticResource SurfaceMutedBrush}"
-                                                 BorderBrush="{StaticResource BorderBrush}"
-                                                 BorderThickness="1"
-                                                 Text="{Binding NewTaskTitle, UpdateSourceTrigger=PropertyChanged}" />
-
-                                        <ComboBox Grid.Column="1"
+                                        <ComboBox Grid.Column="0"
                                                   Margin="0,0,8,0"
                                                   MinHeight="34"
                                                   Background="{StaticResource SurfaceMutedBrush}"
@@ -504,6 +590,12 @@
                                             <ComboBoxItem Content="P3" Tag="{x:Static core:TaskPriority.P3}" />
                                         </ComboBox>
 
+                                        <Button Grid.Column="1"
+                                                Margin="0,0,8,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="仅新建"
+                                                Command="{Binding CreateTaskCommand}" />
+
                                         <Button Grid.Column="2"
                                                 Style="{StaticResource PrimaryButtonStyle}"
                                                 Content="新建并开始"
@@ -514,12 +606,34 @@
 
                             <Border Style="{StaticResource SectionCardStyle}">
                                 <StackPanel>
-                                    <TextBlock Text="任务列表"
-                                               Style="{StaticResource TitleTextStyle}"
-                                               FontSize="13"
-                                               Margin="0,0,0,10" />
-                                    <ItemsControl ItemsSource="{Binding Tasks}"
-                                                  ItemTemplate="{StaticResource TaskListItemTemplate}" />
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="110" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="任务列表"
+                                                   Style="{StaticResource TitleTextStyle}"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center" />
+                                        <ComboBox Grid.Column="1"
+                                                  MinHeight="32"
+                                                  Background="{StaticResource SurfaceMutedBrush}"
+                                                  BorderBrush="{StaticResource BorderBrush}"
+                                                  BorderThickness="1"
+                                                  SelectedValue="{Binding SelectedTaskFilter}"
+                                                  SelectedValuePath="Tag">
+                                            <ComboBoxItem Content="全部" Tag="{x:Static viewModels:TaskListFilterOption.All}" />
+                                            <ComboBoxItem Content="待开始" Tag="{x:Static viewModels:TaskListFilterOption.Pending}" />
+                                            <ComboBoxItem Content="进行中" Tag="{x:Static viewModels:TaskListFilterOption.Running}" />
+                                            <ComboBoxItem Content="已暂停" Tag="{x:Static viewModels:TaskListFilterOption.Paused}" />
+                                            <ComboBoxItem Content="已完成" Tag="{x:Static viewModels:TaskListFilterOption.Completed}" />
+                                        </ComboBox>
+                                    </Grid>
+                                    <ScrollViewer MaxHeight="{Binding TaskListMaxHeight}"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding Tasks}"
+                                                      ItemTemplate="{StaticResource TaskListItemTemplate}" />
+                                    </ScrollViewer>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -701,6 +815,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="90" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <ComboBox Grid.Column="0"
                                               Margin="0,0,8,0"
@@ -715,6 +830,11 @@
                                         <ComboBoxItem Content="P3" Tag="{x:Static core:TaskPriority.P3}" />
                                     </ComboBox>
                                     <Button Grid.Column="1"
+                                            Margin="0,0,8,0"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Content="仅新建"
+                                            Command="{Binding CreateTaskCommand}" />
+                                    <Button Grid.Column="2"
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Content="新建并开始"
                                             Command="{Binding CreateTaskAndStartCommand}" />
@@ -728,12 +848,34 @@
 
                         <Border Style="{StaticResource SectionCardStyle}">
                             <StackPanel>
-                                <TextBlock Text="任务列表"
-                                           Style="{StaticResource TitleTextStyle}"
-                                           FontSize="13"
-                                           Margin="0,0,0,10" />
-                                <ItemsControl ItemsSource="{Binding Tasks}"
-                                              ItemTemplate="{StaticResource TaskListItemTemplate}" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="任务列表"
+                                               Style="{StaticResource TitleTextStyle}"
+                                               FontSize="13"
+                                               VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1"
+                                              MinHeight="32"
+                                              Background="{StaticResource SurfaceMutedBrush}"
+                                              BorderBrush="{StaticResource BorderBrush}"
+                                              BorderThickness="1"
+                                              SelectedValue="{Binding SelectedTaskFilter}"
+                                              SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="全部" Tag="{x:Static viewModels:TaskListFilterOption.All}" />
+                                        <ComboBoxItem Content="待开始" Tag="{x:Static viewModels:TaskListFilterOption.Pending}" />
+                                        <ComboBoxItem Content="进行中" Tag="{x:Static viewModels:TaskListFilterOption.Running}" />
+                                        <ComboBoxItem Content="已暂停" Tag="{x:Static viewModels:TaskListFilterOption.Paused}" />
+                                        <ComboBoxItem Content="已完成" Tag="{x:Static viewModels:TaskListFilterOption.Completed}" />
+                                    </ComboBox>
+                                </Grid>
+                                <ScrollViewer MaxHeight="{Binding TaskListMaxHeight}"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding Tasks}"
+                                                  ItemTemplate="{StaticResource TaskListItemTemplate}" />
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -825,6 +967,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="90" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <ComboBox Grid.Column="0"
                                               Margin="0,0,8,0"
@@ -839,6 +982,11 @@
                                         <ComboBoxItem Content="P3" Tag="{x:Static core:TaskPriority.P3}" />
                                     </ComboBox>
                                     <Button Grid.Column="1"
+                                            Margin="0,0,8,0"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Content="仅新建"
+                                            Command="{Binding CreateTaskCommand}" />
+                                    <Button Grid.Column="2"
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Content="新建并开始"
                                             Command="{Binding CreateTaskAndStartCommand}" />
@@ -852,12 +1000,34 @@
 
                         <Border Style="{StaticResource SectionCardStyle}">
                             <StackPanel>
-                                <TextBlock Text="任务列表"
-                                           Style="{StaticResource TitleTextStyle}"
-                                           FontSize="13"
-                                           Margin="0,0,0,10" />
-                                <ItemsControl ItemsSource="{Binding Tasks}"
-                                              ItemTemplate="{StaticResource TaskListItemTemplate}" />
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="任务列表"
+                                               Style="{StaticResource TitleTextStyle}"
+                                               FontSize="13"
+                                               VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1"
+                                              MinHeight="32"
+                                              Background="{StaticResource SurfaceMutedBrush}"
+                                              BorderBrush="{StaticResource BorderBrush}"
+                                              BorderThickness="1"
+                                              SelectedValue="{Binding SelectedTaskFilter}"
+                                              SelectedValuePath="Tag">
+                                        <ComboBoxItem Content="全部" Tag="{x:Static viewModels:TaskListFilterOption.All}" />
+                                        <ComboBoxItem Content="待开始" Tag="{x:Static viewModels:TaskListFilterOption.Pending}" />
+                                        <ComboBoxItem Content="进行中" Tag="{x:Static viewModels:TaskListFilterOption.Running}" />
+                                        <ComboBoxItem Content="已暂停" Tag="{x:Static viewModels:TaskListFilterOption.Paused}" />
+                                        <ComboBoxItem Content="已完成" Tag="{x:Static viewModels:TaskListFilterOption.Completed}" />
+                                    </ComboBox>
+                                </Grid>
+                                <ScrollViewer MaxHeight="{Binding TaskListMaxHeight}"
+                                              VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding Tasks}"
+                                                  ItemTemplate="{StaticResource TaskListItemTemplate}" />
+                                </ScrollViewer>
                             </StackPanel>
                         </Border>
                     </StackPanel>

@@ -85,4 +85,40 @@ public sealed class ShellViewModelTests
         viewModel.CurrentWindowWidth.Should().Be(viewModel.SideCollapsedWidth + viewModel.SideDrawerWidth + viewModel.SideDrawerGap);
         viewModel.SideToggleHintText.Should().Be("<");
     }
+
+    [Fact]
+    public async Task SelectedTaskFilter_ShouldOnlyExposeMatchingTasks()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 5, 29, 9, 0, 0, TimeSpan.Zero));
+        using var db = TestDbContextFactory.CreateInMemory();
+
+        var taskService = new TaskService(db.Context, clock);
+        var timerService = new TimerService(db.Context, clock);
+        var settingsService = new SettingsService(db.Context, clock);
+        var statisticsService = new StatisticsService(db.Context, clock);
+
+        var pausedTask = await taskService.CreateTaskAsync(new TaskCreateRequest { Title = "暂停任务", Priority = TaskPriority.P1 });
+        var pendingTask = await taskService.CreateTaskAsync(new TaskCreateRequest { Title = "待开始任务", Priority = TaskPriority.P2 });
+        var completedTask = await taskService.CreateTaskAsync(new TaskCreateRequest { Title = "已完成任务", Priority = TaskPriority.P3 });
+
+        await timerService.StartTaskAsync(pausedTask.Id);
+        clock.Advance(TimeSpan.FromMinutes(5));
+        await timerService.PauseTaskAsync(pausedTask.Id);
+
+        await timerService.StartTaskAsync(completedTask.Id);
+        clock.Advance(TimeSpan.FromMinutes(2));
+        await timerService.CompleteTaskAsync(completedTask.Id);
+
+        var viewModel = new ShellViewModel(taskService, timerService, statisticsService, settingsService, new SilentNotificationService());
+        await viewModel.InitializeAsync();
+
+        viewModel.SelectedTaskFilter = TaskListFilterOption.Paused;
+        viewModel.Tasks.Select(item => item.Title).Should().Equal("暂停任务");
+
+        viewModel.SelectedTaskFilter = TaskListFilterOption.Pending;
+        viewModel.Tasks.Select(item => item.Title).Should().Equal("待开始任务");
+
+        viewModel.SelectedTaskFilter = TaskListFilterOption.All;
+        viewModel.Tasks.Should().HaveCount(3);
+    }
 }

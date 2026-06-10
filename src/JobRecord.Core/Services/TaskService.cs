@@ -35,6 +35,18 @@ public sealed class TaskService(IJobRecordDbContext dbContext, IClock clock) : I
         return task;
     }
 
+    public async Task<TaskItem> RenameTaskAsync(Guid taskId, string title, CancellationToken cancellationToken = default)
+    {
+        var task = dbContext.Tasks.SingleOrDefault(task => task.Id == taskId && !task.IsArchived)
+            ?? throw new InvalidOperationException("任务不存在。");
+
+        task.Title = NormalizeTitle(title);
+        task.UpdatedAt = clock.Now;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return task;
+    }
+
     public async Task<TaskItem> UpdateTaskAsync(Guid taskId, TaskUpdateRequest request, CancellationToken cancellationToken = default)
     {
         var task = dbContext.Tasks.SingleOrDefault(task => task.Id == taskId && !task.IsArchived)
@@ -63,6 +75,7 @@ public sealed class TaskService(IJobRecordDbContext dbContext, IClock clock) : I
         var items = query
             .OrderBy(task => task.Status == TaskStatus.Running ? 0 : task.Status == TaskStatus.Paused ? 1 : task.Status == TaskStatus.Pending ? 2 : 3)
             .ThenBy(task => task.Priority)
+            .ThenByDescending(task => task.Status == TaskStatus.Paused ? task.UpdatedAt : DateTimeOffset.MinValue)
             .ThenBy(task => task.SortOrder)
             .ThenBy(task => task.CreatedAt)
             .ToList();
