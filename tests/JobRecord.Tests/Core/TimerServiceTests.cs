@@ -62,4 +62,41 @@ public sealed class TimerServiceTests
         var action = async () => await timerService.StartTaskAsync(task.Id);
         await action.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public async Task SubTaskFlow_ShouldTrackDurationsAndRequireCompletionBeforeParent()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 5, 29, 14, 0, 0, TimeSpan.Zero));
+        using var db = TestDbContextFactory.CreateInMemory();
+        var taskService = new TaskService(db.Context, clock);
+        var timerService = new TimerService(db.Context, clock);
+        var statisticsService = new StatisticsService(db.Context, clock);
+
+        var task = await taskService.CreateTaskAsync(new TaskCreateRequest { Title = "父任务" });
+        var subTaskA = await taskService.CreateSubTaskAsync(task.Id, new SubTaskCreateRequest { Title = "调研" });
+        var subTaskB = await taskService.CreateSubTaskAsync(task.Id, new SubTaskCreateRequest { Title = "实现" });
+
+        await timerService.StartSubTaskAsync(task.Id, subTaskA.Id);
+        clock.Advance(TimeSpan.FromMinutes(20));
+        await timerService.StartSubTaskAsync(task.Id, subTaskB.Id);
+        clock.Advance(TimeSpan.FromMinutes(10));
+        await timerService.CompleteSubTaskAsync(subTaskB.Id);
+
+        db.Context.SubTaskItems.Single(item => item.Id == subTaskA.Id).Status.Should().Be(TaskStatus.Paused);
+        db.Context.SubTaskItems.Single(item => item.Id == subTaskB.Id).Status.Should().Be(TaskStatus.Completed);
+        db.Context.SubTaskItems.Single(item => item.Id == subTaskB.Id).CompletedAt.Should().Be(clock.Now);
+        db.Context.TaskItems.Single(item => item.Id == task.Id).Status.Should().Be(TaskStatus.Paused);
+
+        (await statisticsService.GetSubTaskDurationAsync(subTaskA.Id)).Should().Be(TimeSpan.FromMinutes(20));
+        (await statisticsService.GetSubTaskDurationAsync(subTaskB.Id)).Should().Be(TimeSpan.FromMinutes(10));
+        (await statisticsService.GetTaskDurationAsync(task.Id)).Should().Be(TimeSpan.FromMinutes(30));
+
+        var completeParentWithOpenSubTask = async () => await timerService.CompleteTaskAsync(task.Id);
+        await completeParentWithOpenSubTask.Should().ThrowAsync<InvalidOperationException>();
+
+        await timerService.CompleteSubTaskAsync(subTaskA.Id);
+        await timerService.CompleteTaskAsync(task.Id);
+
+        db.Context.TaskItems.Single(item => item.Id == task.Id).Status.Should().Be(TaskStatus.Completed);
+    }
 }

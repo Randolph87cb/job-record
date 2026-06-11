@@ -5,6 +5,7 @@ namespace JobRecord.Core.Abstractions;
 public interface IJobRecordDbContext
 {
     IQueryable<TaskItem> Tasks { get; }
+    IQueryable<SubTaskItem> SubTasks { get; }
     IQueryable<TimeEntry> TimeEntries { get; }
     IQueryable<AppSettings> Settings { get; }
     IQueryable<RuntimeState> RuntimeStates { get; }

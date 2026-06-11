@@ -30,6 +30,16 @@ public sealed class StatisticsService(IJobRecordDbContext dbContext, IClock cloc
         return Task.FromResult(duration);
     }
 
+    public Task<TimeSpan> GetSubTaskDurationAsync(Guid subTaskId, CancellationToken cancellationToken = default)
+    {
+        var duration = dbContext.TimeEntries
+            .Where(entry => entry.SubTaskItemId == subTaskId)
+            .AsEnumerable()
+            .Aggregate(TimeSpan.Zero, (sum, entry) => sum + GetEffectiveDuration(entry));
+
+        return Task.FromResult(duration);
+    }
+
     public Task<int> GetTodayCompletedTasksAsync(DateOnly? day = null, CancellationToken cancellationToken = default)
     {
         var targetDay = day ?? DateOnly.FromDateTime(clock.Now.LocalDateTime.Date);

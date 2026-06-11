@@ -12,6 +12,7 @@ public sealed class RuntimeRecoveryService(IJobRecordDbContext dbContext, IClock
         var now = clock.Now;
         var fixedEntries = 0;
         var pausedTaskIds = new HashSet<Guid>();
+        var pausedSubTaskIds = new HashSet<Guid>();
 
         foreach (var entry in dbContext.TimeEntries.Where(item => item.EndAt == null).ToList())
         {
@@ -20,12 +21,22 @@ public sealed class RuntimeRecoveryService(IJobRecordDbContext dbContext, IClock
             entry.EntryType = entry.EntryType == TimeEntryType.Manual ? TimeEntryType.Recovery : entry.EntryType;
             fixedEntries++;
             pausedTaskIds.Add(entry.TaskItemId);
+            if (entry.SubTaskItemId.HasValue)
+            {
+                pausedSubTaskIds.Add(entry.SubTaskItemId.Value);
+            }
         }
 
         foreach (var task in dbContext.Tasks.Where(task => pausedTaskIds.Contains(task.Id)).ToList())
         {
             task.Status = TaskStatus.Paused;
             task.UpdatedAt = now;
+        }
+
+        foreach (var subTask in dbContext.SubTasks.Where(subTask => pausedSubTaskIds.Contains(subTask.Id)).ToList())
+        {
+            subTask.Status = TaskStatus.Paused;
+            subTask.UpdatedAt = now;
         }
 
         var runtimeState = dbContext.RuntimeStates.SingleOrDefault() ?? new RuntimeState

@@ -9,11 +9,13 @@ public sealed class JobRecordDbContext(DbContextOptions<JobRecordDbContext> opti
     : DbContext(options), IJobRecordDbContext
 {
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
+    public DbSet<SubTaskItem> SubTaskItems => Set<SubTaskItem>();
     public DbSet<TimeEntry> TimeEntriesSet => Set<TimeEntry>();
     public DbSet<AppSettings> AppSettingsSet => Set<AppSettings>();
     public DbSet<RuntimeState> RuntimeStatesSet => Set<RuntimeState>();
 
     IQueryable<TaskItem> IJobRecordDbContext.Tasks => TaskItems;
+    IQueryable<SubTaskItem> IJobRecordDbContext.SubTasks => SubTaskItems;
     IQueryable<TimeEntry> IJobRecordDbContext.TimeEntries => TimeEntriesSet;
     IQueryable<AppSettings> IJobRecordDbContext.Settings => AppSettingsSet;
     IQueryable<RuntimeState> IJobRecordDbContext.RuntimeStates => RuntimeStatesSet;
@@ -35,17 +37,36 @@ public sealed class JobRecordDbContext(DbContextOptions<JobRecordDbContext> opti
             builder.HasIndex(task => new { task.IsArchived, task.Status, task.SortOrder });
         });
 
+        modelBuilder.Entity<SubTaskItem>(builder =>
+        {
+            builder.ToTable("SubTasks");
+            builder.HasKey(subTask => subTask.Id);
+            builder.Property(subTask => subTask.Title).HasMaxLength(80).IsRequired();
+            builder.Property(subTask => subTask.Status).HasConversion<int>();
+            builder.Property(subTask => subTask.Notes).HasMaxLength(1000);
+            builder.HasIndex(subTask => new { subTask.TaskItemId, subTask.IsArchived, subTask.Status, subTask.SortOrder });
+            builder.HasOne(subTask => subTask.TaskItem)
+                .WithMany(task => task.SubTasks)
+                .HasForeignKey(subTask => subTask.TaskItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<TimeEntry>(builder =>
         {
             builder.ToTable("TimeEntries");
             builder.HasKey(entry => entry.Id);
             builder.Property(entry => entry.EntryType).HasConversion<int>();
             builder.HasIndex(entry => entry.TaskItemId);
+            builder.HasIndex(entry => entry.SubTaskItemId);
             builder.HasIndex(entry => entry.EndAt);
             builder.HasOne(entry => entry.TaskItem)
                 .WithMany(task => task.TimeEntries)
                 .HasForeignKey(entry => entry.TaskItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(entry => entry.SubTaskItem)
+                .WithMany(subTask => subTask.TimeEntries)
+                .HasForeignKey(entry => entry.SubTaskItemId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AppSettings>(builder =>

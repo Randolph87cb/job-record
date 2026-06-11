@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using JobRecord.App.Styling;
 using JobRecord.Core.Enums;
 using Brush = System.Windows.Media.Brush;
@@ -7,6 +8,7 @@ namespace JobRecord.App.ViewModels;
 public sealed class TaskListItemViewModel : ObservableObject
 {
     private string _editableTitle = string.Empty;
+    private string _newSubTaskTitle = string.Empty;
     private bool _isEditing;
 
     public required Guid Id { get; init; }
@@ -17,6 +19,8 @@ public sealed class TaskListItemViewModel : ObservableObject
     public required string DurationText { get; init; }
     public required string EstimateText { get; init; }
     public bool IsCurrent { get; init; }
+    public Action<Guid, string>? NewSubTaskTitleChanged { get; init; }
+    public ObservableCollection<SubTaskListItemViewModel> SubTasks { get; } = [];
 
     public string EditableTitle
     {
@@ -42,6 +46,19 @@ public sealed class TaskListItemViewModel : ObservableObject
         }
     }
 
+    public string NewSubTaskTitle
+    {
+        get => _newSubTaskTitle;
+        set
+        {
+            if (SetProperty(ref _newSubTaskTitle, value))
+            {
+                NewSubTaskTitleChanged?.Invoke(Id, value);
+                RaisePropertyChanged(nameof(CanCreateSubTask));
+            }
+        }
+    }
+
     public string PriorityText => Priority.ToString();
     public Brush PriorityBackground => UiPalette.GetPriorityBackground(Priority);
     public Brush PriorityForeground => UiPalette.GetPriorityForeground(Priority);
@@ -58,6 +75,7 @@ public sealed class TaskListItemViewModel : ObservableObject
 
     public bool CanPrimaryAction => Status != TaskStatus.Completed;
     public bool CanComplete => Status != TaskStatus.Completed;
+    public bool CanCreateSubTask => Status != TaskStatus.Completed && !string.IsNullOrWhiteSpace(NewSubTaskTitle);
     public bool CanSaveEdit => IsEditing &&
         !string.IsNullOrWhiteSpace(EditableTitle) &&
         !string.Equals(EditableTitle.Trim(), Title, StringComparison.Ordinal);

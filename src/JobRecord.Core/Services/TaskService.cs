@@ -63,6 +63,68 @@ public sealed class TaskService(IJobRecordDbContext dbContext, IClock clock) : I
         return task;
     }
 
+    public async Task<SubTaskItem> CreateSubTaskAsync(Guid taskId, SubTaskCreateRequest request, CancellationToken cancellationToken = default)
+    {
+        var task = dbContext.Tasks.SingleOrDefault(task => task.Id == taskId && !task.IsArchived)
+            ?? throw new InvalidOperationException("任务不存在。");
+        var title = NormalizeTitle(request.Title);
+        var now = clock.Now;
+        var nextSortOrder = dbContext.SubTasks
+            .Where(subTask => subTask.TaskItemId == task.Id && !subTask.IsArchived)
+            .AsEnumerable()
+            .Select(subTask => (int?)subTask.SortOrder)
+            .DefaultIfEmpty(0)
+            .Max() ?? 0;
+
+        var subTask = new SubTaskItem
+        {
+            TaskItemId = task.Id,
+            Title = title,
+            EstimateMinutes = request.EstimateMinutes,
+            Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
+            CreatedAt = now,
+            UpdatedAt = now,
+            SortOrder = nextSortOrder + 1,
+            Status = TaskStatus.Pending
+        };
+
+        task.UpdatedAt = now;
+        dbContext.Add(subTask);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return subTask;
+    }
+
+    public async Task<SubTaskItem> RenameSubTaskAsync(Guid subTaskId, string title, CancellationToken cancellationToken = default)
+    {
+        var subTask = dbContext.SubTasks.SingleOrDefault(subTask => subTask.Id == subTaskId && !subTask.IsArchived)
+            ?? throw new InvalidOperationException("子任务不存在。");
+
+        subTask.Title = NormalizeTitle(title);
+        subTask.UpdatedAt = clock.Now;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return subTask;
+    }
+
+    public Task<IReadOnlyList<SubTaskItem>> GetSubTasksAsync(Guid taskId, bool includeArchived = false, CancellationToken cancellationToken = default)
+    {
+        var query = dbContext.SubTasks.Where(subTask => subTask.TaskItemId == taskId).AsEnumerable();
+
+        if (!includeArchived)
+        {
+            query = query.Where(subTask => !subTask.IsArchived);
+        }
+
+        var items = query
+            .OrderBy(subTask => subTask.Status == TaskStatus.Running ? 0 : subTask.Status == TaskStatus.Paused ? 1 : subTask.Status == TaskStatus.Pending ? 2 : 3)
+            .ThenByDescending(subTask => subTask.Status == TaskStatus.Paused ? subTask.UpdatedAt : DateTimeOffset.MinValue)
+            .ThenBy(subTask => subTask.SortOrder)
+            .ThenBy(subTask => subTask.CreatedAt)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<SubTaskItem>>(items);
+    }
+
     public Task<IReadOnlyList<TaskItem>> GetTaskListAsync(bool includeArchived = false, CancellationToken cancellationToken = default)
     {
         var query = dbContext.Tasks.AsEnumerable();

@@ -2,11 +2,12 @@ using JobRecord.Core.Enums;
 
 namespace JobRecord.Core.Models;
 
-public sealed class TaskItem
+public sealed class SubTaskItem
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TaskItemId { get; set; }
+    public TaskItem? TaskItem { get; set; }
     public string Title { get; set; } = string.Empty;
-    public TaskPriority Priority { get; set; } = TaskPriority.P2;
     public TaskStatus Status { get; set; } = TaskStatus.Pending;
     public int? EstimateMinutes { get; set; }
     public string? Notes { get; set; }
@@ -17,5 +18,4 @@ public sealed class TaskItem
     public int SortOrder { get; set; }
     public bool IsArchived { get; set; }
     public List<TimeEntry> TimeEntries { get; set; } = [];
-    public List<SubTaskItem> SubTasks { get; set; } = [];
 }

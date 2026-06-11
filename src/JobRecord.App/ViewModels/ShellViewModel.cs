@@ -19,6 +19,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IUserNotificationService _notificationService;
     private readonly List<TaskListItemViewModel> _allTasks = [];
+    private readonly Dictionary<Guid, string> _newSubTaskTitles = [];
 
     private TaskItem? _displayTask;
     private string _currentTaskTitle = "无当前任务";
@@ -61,6 +62,9 @@ public sealed class ShellViewModel : ObservableObject
         CreateTaskAndStartCommand = new AsyncRelayCommand(() => RunSafeAsync(CreateTaskAndStartInternalAsync, "创建任务失败。"), () => !string.IsNullOrWhiteSpace(NewTaskTitle));
         PrimaryTaskActionCommand = new AsyncRelayCommand<TaskListItemViewModel>(item => RunSafeAsync(() => ExecutePrimaryTaskActionInternalAsync(item), "执行任务操作失败。"), item => item.CanPrimaryAction);
         CompleteTaskCommand = new AsyncRelayCommand<TaskListItemViewModel>(item => RunSafeAsync(() => CompleteTaskInternalAsync(item), "完成任务失败。"), item => item.CanComplete);
+        CreateSubTaskCommand = new AsyncRelayCommand<TaskListItemViewModel>(item => RunSafeAsync(() => CreateSubTaskInternalAsync(item), "创建子任务失败。"), item => item.Status != TaskStatus.Completed);
+        PrimarySubTaskActionCommand = new AsyncRelayCommand<SubTaskListItemViewModel>(item => RunSafeAsync(() => ExecutePrimarySubTaskActionInternalAsync(item), "执行子任务操作失败。"), item => item.CanPrimaryAction);
+        CompleteSubTaskCommand = new AsyncRelayCommand<SubTaskListItemViewModel>(item => RunSafeAsync(() => CompleteSubTaskInternalAsync(item), "完成子任务失败。"), item => item.CanComplete);
         BeginEditTaskCommand = new AsyncRelayCommand<TaskListItemViewModel>(item => RunSafeAsync(() => BeginEditTaskInternalAsync(item), "进入编辑失败。"), item => item is not null && !item.IsEditing);
         CancelEditTaskCommand = new AsyncRelayCommand<TaskListItemViewModel>(item => RunSafeAsync(() => CancelEditTaskInternalAsync(item), "取消编辑失败。"), item => item is not null && item.IsEditing);
         SaveTaskEditCommand = new AsyncRelayCommand<TaskListItemViewModel>(item => RunSafeAsync(() => SaveTaskEditInternalAsync(item), "保存任务名称失败。"), item => item is not null && item.IsEditing);
@@ -75,6 +79,9 @@ public sealed class ShellViewModel : ObservableObject
     public ICommand CreateTaskAndStartCommand { get; }
     public ICommand PrimaryTaskActionCommand { get; }
     public ICommand CompleteTaskCommand { get; }
+    public ICommand CreateSubTaskCommand { get; }
+    public ICommand PrimarySubTaskActionCommand { get; }
+    public ICommand CompleteSubTaskCommand { get; }
     public ICommand BeginEditTaskCommand { get; }
     public ICommand CancelEditTaskCommand { get; }
     public ICommand SaveTaskEditCommand { get; }
@@ -275,11 +282,17 @@ public sealed class ShellViewModel : ObservableObject
         }
         else
         {
-            CurrentTaskTitle = _displayTask.Title;
+            var displaySubTasks = await _taskService.GetSubTasksAsync(_displayTask.Id);
+            var displaySubTask = displaySubTasks.FirstOrDefault(subTask => subTask.Status == TaskStatus.Running)
+                ?? displaySubTasks.FirstOrDefault(subTask => subTask.Status == TaskStatus.Paused);
+
+            CurrentTaskTitle = displaySubTask is null ? _displayTask.Title : $"{_displayTask.Title} / {displaySubTask.Title}";
             CurrentPriorityText = _displayTask.Priority.ToString();
-            CurrentDurationText = FormatDuration(_displayTask.Status == TaskStatus.Running
-                ? await _statisticsService.GetCurrentTaskDisplayDurationAsync(_displayTask.Id)
-                : await _statisticsService.GetTaskDurationAsync(_displayTask.Id));
+            CurrentDurationText = FormatDuration(displaySubTask is not null
+                ? await _statisticsService.GetSubTaskDurationAsync(displaySubTask.Id)
+                : _displayTask.Status == TaskStatus.Running
+                    ? await _statisticsService.GetCurrentTaskDisplayDurationAsync(_displayTask.Id)
+                    : await _statisticsService.GetTaskDurationAsync(_displayTask.Id));
             StatusText = _displayTask.Status == TaskStatus.Running ? "进行中" : "已暂停";
         }
 
@@ -290,7 +303,7 @@ public sealed class ShellViewModel : ObservableObject
         foreach (var task in tasks)
         {
             var duration = await _statisticsService.GetTaskDurationAsync(task.Id);
-            _allTasks.Add(new TaskListItemViewModel
+            var item = new TaskListItemViewModel
             {
                 Id = task.Id,
                 Title = task.Title,
@@ -306,8 +319,34 @@ public sealed class ShellViewModel : ObservableObject
                 DurationText = FormatDuration(duration),
                 EstimateText = task.EstimateMinutes.HasValue ? $"预估 {task.EstimateMinutes} 分钟" : "无预估",
                 IsCurrent = _displayTask?.Id == task.Id,
-                EditableTitle = task.Title
-            });
+                EditableTitle = task.Title,
+                NewSubTaskTitleChanged = UpdateNewSubTaskTitleCache
+            };
+            item.NewSubTaskTitle = _newSubTaskTitles.TryGetValue(task.Id, out var subTaskTitle) ? subTaskTitle : string.Empty;
+
+            var subTasks = await _taskService.GetSubTasksAsync(task.Id);
+            foreach (var subTask in subTasks)
+            {
+                var subTaskDuration = await _statisticsService.GetSubTaskDurationAsync(subTask.Id);
+                item.SubTasks.Add(new SubTaskListItemViewModel
+                {
+                    Id = subTask.Id,
+                    TaskId = task.Id,
+                    Title = subTask.Title,
+                    Status = subTask.Status,
+                    StatusText = subTask.Status switch
+                    {
+                        TaskStatus.Running => "进行中",
+                        TaskStatus.Paused => "已暂停",
+                        TaskStatus.Completed => "已完成",
+                        _ => "待开始"
+                    },
+                    DurationText = FormatDuration(subTaskDuration),
+                    CompletedAtText = subTask.CompletedAt.HasValue ? $"完成 {subTask.CompletedAt.Value.LocalDateTime:HH:mm}" : string.Empty
+                });
+            }
+
+            _allTasks.Add(item);
         }
 
         ApplyTaskFilter();
@@ -434,6 +473,53 @@ public sealed class ShellViewModel : ObservableObject
         await RefreshAsync();
     }
 
+    private async Task CreateSubTaskInternalAsync(TaskListItemViewModel item)
+    {
+        if (!item.CanCreateSubTask)
+        {
+            return;
+        }
+
+        await _taskService.CreateSubTaskAsync(item.Id, new SubTaskCreateRequest
+        {
+            Title = item.NewSubTaskTitle
+        });
+
+        _newSubTaskTitles.Remove(item.Id);
+        await RefreshAsync();
+    }
+
+    private async Task ExecutePrimarySubTaskActionInternalAsync(SubTaskListItemViewModel item)
+    {
+        switch (item.Status)
+        {
+            case TaskStatus.Pending:
+                await _timerService.StartSubTaskAsync(item.TaskId, item.Id);
+                break;
+            case TaskStatus.Paused:
+                await _timerService.ResumeSubTaskAsync(item.Id);
+                break;
+            case TaskStatus.Running:
+                await _timerService.PauseSubTaskAsync(item.Id);
+                break;
+            case TaskStatus.Completed:
+                return;
+        }
+
+        await RefreshAsync();
+    }
+
+    private async Task CompleteSubTaskInternalAsync(SubTaskListItemViewModel item)
+    {
+        if (!item.CanComplete)
+        {
+            return;
+        }
+
+        await _timerService.CompleteSubTaskAsync(item.Id);
+        await RefreshAsync();
+    }
+
     private Task BeginEditTaskInternalAsync(TaskListItemViewModel item)
     {
         foreach (var existingItem in _allTasks.Where(existingItem => existingItem.IsEditing && existingItem.Id != item.Id))
@@ -472,6 +558,18 @@ public sealed class ShellViewModel : ObservableObject
             Tasks.Add(task);
         }
 
+        RaiseCommandStateChanged();
+    }
+
+    private void UpdateNewSubTaskTitleCache(Guid taskId, string title)
+    {
+        if (string.IsNullOrEmpty(title))
+        {
+            _newSubTaskTitles.Remove(taskId);
+            return;
+        }
+
+        _newSubTaskTitles[taskId] = title;
         RaiseCommandStateChanged();
     }
 
@@ -535,6 +633,9 @@ public sealed class ShellViewModel : ObservableObject
         (CreateTaskAndStartCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         (PrimaryTaskActionCommand as AsyncRelayCommand<TaskListItemViewModel>)?.RaiseCanExecuteChanged();
         (CompleteTaskCommand as AsyncRelayCommand<TaskListItemViewModel>)?.RaiseCanExecuteChanged();
+        (CreateSubTaskCommand as AsyncRelayCommand<TaskListItemViewModel>)?.RaiseCanExecuteChanged();
+        (PrimarySubTaskActionCommand as AsyncRelayCommand<SubTaskListItemViewModel>)?.RaiseCanExecuteChanged();
+        (CompleteSubTaskCommand as AsyncRelayCommand<SubTaskListItemViewModel>)?.RaiseCanExecuteChanged();
         (BeginEditTaskCommand as AsyncRelayCommand<TaskListItemViewModel>)?.RaiseCanExecuteChanged();
         (CancelEditTaskCommand as AsyncRelayCommand<TaskListItemViewModel>)?.RaiseCanExecuteChanged();
         (SaveTaskEditCommand as AsyncRelayCommand<TaskListItemViewModel>)?.RaiseCanExecuteChanged();
