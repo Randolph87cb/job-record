@@ -176,7 +176,10 @@ public partial class MainWindow : Window
 
     private async void RefreshTimerOnTick(object? sender, EventArgs e)
     {
-        await _viewModel.RefreshAsync();
+        if (Keyboard.FocusedElement is not System.Windows.Controls.TextBox)
+        {
+            await _viewModel.RefreshAsync();
+        }
 
         var shouldCompact = !_viewModel.IsExpanded &&
             _viewModel.HasCurrentTask &&
