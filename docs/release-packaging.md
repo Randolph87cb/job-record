@@ -91,7 +91,19 @@ artifacts/installer
 
 例如：
 
-- [JobRecord-Setup-1.2.3.exe](D:\workspace\小工具\工作时间记录\artifacts\installer\JobRecord-Setup-1.2.3.exe)
+- [JobRecord-Setup-1.2.4-beta.3.exe](D:\workspace\小工具\工作时间记录\artifacts\installer\JobRecord-Setup-1.2.4-beta.3.exe)
+
+最近一次本地打包记录：
+
+- 日期：2026-06-11
+- 命令：`.\scripts\build-installer.ps1 -Version 1.2.4-beta.3 -Clean`
+- 安装包：[JobRecord-Setup-1.2.4-beta.3.exe](D:\workspace\小工具\工作时间记录\artifacts\installer\JobRecord-Setup-1.2.4-beta.3.exe)
+- 文件大小：`56,317,652` 字节
+- SHA256：`01BBDA795D61048F410B218B671C55A951235F8F21F33C6DCD9710190097F61F`
+- 文件版本 / 产品版本：`1.2.4.0`
+- 对应提交：`ea8ba65`
+
+说明：`artifacts/` 目录被 `.gitignore` 忽略，安装包是本地产物，不随 Git 提交同步。
 
 ## 6. 图标与版本信息
 

@@ -43,7 +43,8 @@
 3. 任务的实际工作时间按多个时间段记录，而不是只记录一个累计值。
 4. 用户切换任务时，系统会自动结束上一个任务的当前计时段，并开始新任务的计时段。
 5. 用户可以随时查看今日总时长、单任务累计时长和完成情况。
-6. 应用重启后，任务状态、计时信息、布局设置和历史记录不会丢失。
+6. 用户可以为任务配置子任务，并查看子任务耗时与完成时间。
+7. 应用重启后，任务状态、计时信息、布局设置和历史记录不会丢失。
 
 ## 4. 后端模块划分
 
@@ -54,6 +55,7 @@
 负责：
 
 - 创建任务
+- 创建子任务
 - 编辑任务基础信息
 - 删除未使用任务或归档任务
 - 查询任务列表
@@ -76,6 +78,7 @@
 
 - 统计今日总工作时长
 - 统计单任务累计时长
+- 统计单子任务累计时长
 - 统计任务完成数量
 - 统计高优任务耗时
 - 输出按日汇总数据
@@ -134,6 +137,7 @@
 
 - `Id`
 - `TaskId`
+- `SubTaskId`
 - `StartAt`
 - `EndAt`
 - `DurationSeconds`
@@ -143,6 +147,7 @@
 字段说明：
 
 - `TaskId`：关联任务
+- `SubTaskId`：可选，关联子任务；为空表示该时间段只归属于父任务，未细分到子任务
 - `StartAt`：计时开始时间
 - `EndAt`：计时结束时间，进行中时可为空
 - `DurationSeconds`：结束时写入，便于统计
@@ -152,8 +157,42 @@
 
 - 第一版统计应以 `TimeEntry` 为准，不以界面显示时间为准。
 - 每次开始、恢复、切换任务，都会新增一条 `TimeEntry`。
+- 父任务总耗时按 `TaskId` 汇总；子任务明细耗时按 `SubTaskId` 汇总。
 
-## 5.3 AppSettings
+## 5.3 SubTask
+
+表示某个任务下的细分工作项。
+
+字段建议：
+
+- `Id`
+- `TaskId`
+- `Title`
+- `Status`
+- `EstimateMinutes`
+- `Notes`
+- `CreatedAt`
+- `UpdatedAt`
+- `StartedAt`
+- `CompletedAt`
+- `SortOrder`
+- `IsArchived`
+
+字段说明：
+
+- `TaskId`：所属父任务
+- `Status`：`Pending / Running / Paused / Completed`
+- `StartedAt`：首次开始时间，可为空
+- `CompletedAt`：子任务完成时间，可为空
+- `SortOrder`：用于父任务内的子任务排序
+
+说明：
+
+- 子任务不进入顶层任务列表。
+- 同一时刻仍然只允许一个 `TimeEntry.EndAt = null`。
+- 子任务计时时，`TimeEntry.TaskId` 和 `TimeEntry.SubTaskId` 同时写入，确保父任务总耗时和子任务明细可分别统计。
+
+## 5.4 AppSettings
 
 表示应用级设置。
 
@@ -177,7 +216,7 @@
 - `DockMode`：`TopCenter / LeftEdge / RightEdge`
 - `Theme`：第一版可先只支持 `System`
 
-## 5.4 RuntimeState
+## 5.5 RuntimeState
 
 表示程序恢复时需要的运行状态。
 
@@ -284,11 +323,13 @@
 
 行为：
 
-1. 若任务处于 `Running`，先结束其未完成时间段。
-2. 若任务处于 `Paused`，不再新建时间段。
-3. 将任务状态改为 `Completed`。
-4. 写入 `CompletedAt`。
-5. 清空 `RuntimeState.CurrentTaskId`。
+1. 检查该任务下是否存在未完成子任务。
+2. 若存在未完成子任务，拒绝完成父任务。
+3. 若任务处于 `Running`，先结束其未完成时间段。
+4. 若任务处于 `Paused`，不再新建时间段。
+5. 将任务状态改为 `Completed`。
+6. 写入 `CompletedAt`。
+7. 清空 `RuntimeState.CurrentTaskId`。
 
 ## 7.6 切换任务
 
@@ -333,6 +374,70 @@
 
 这样可以避免统计数据断裂。
 
+## 7.9 创建子任务
+
+输入：
+
+- `TaskId`
+- `Title`
+
+行为：
+
+1. 校验父任务存在且未归档。
+2. 校验子任务标题不为空且不超过长度限制。
+3. 在父任务内追加 `SortOrder`。
+4. 新建 `SubTask`，默认状态为 `Pending`。
+5. 更新父任务 `UpdatedAt`。
+
+## 7.10 开始子任务
+
+输入：
+
+- `TaskId`
+- `SubTaskId`
+
+行为：
+
+1. 校验父任务存在、未归档且未完成。
+2. 校验子任务属于该父任务、未归档且未完成。
+3. 若已有其他任务或子任务正在计时，先关闭其当前 `TimeEntry`。
+4. 将父任务和目标子任务状态改为 `Running`。
+5. 若父任务或子任务从未开始过，分别写入 `StartedAt`。
+6. 新增一条 `TimeEntry`，同时写入 `TaskId` 和 `SubTaskId`。
+7. 更新 `RuntimeState.CurrentTaskId` 为父任务 `Id`。
+
+## 7.11 暂停子任务
+
+输入：
+
+- `SubTaskId`
+
+行为：
+
+1. 校验子任务当前为 `Running`。
+2. 关闭父任务当前未结束的 `TimeEntry`。
+3. 将子任务状态改为 `Paused`。
+4. 将父任务状态改为 `Paused`。
+5. 清空 `RuntimeState.CurrentTaskId`。
+
+## 7.12 完成子任务
+
+输入：
+
+- `SubTaskId`
+
+行为：
+
+1. 若子任务处于 `Running`，先关闭父任务当前未结束的 `TimeEntry`。
+2. 将子任务状态改为 `Completed`。
+3. 写入子任务 `CompletedAt`。
+4. 若子任务完成前处于运行中，将父任务状态改为 `Paused`，避免父任务仍显示运行但没有活动计时段。
+
+说明：
+
+- 完成子任务不会自动完成父任务。
+- 父任务完成前必须先完成其所有未归档子任务。
+
 ## 8. 统计规则
 
 ## 8.1 今日总工作时长
@@ -351,13 +456,23 @@
 
 - 某任务所有 `TimeEntry.DurationSeconds` 的总和
 
-## 8.3 今日完成任务数
+## 8.3 单子任务累计时长
+
+定义：
+
+- 某子任务所有 `TimeEntry.SubTaskId = SubTask.Id` 的有效时长之和
+
+说明：
+
+- 如果某些时间段没有 `SubTaskId`，这些时间段只计入父任务总耗时，不计入任何子任务明细。
+
+## 8.4 今日完成任务数
 
 定义：
 
 - `CompletedAt` 落在今日范围内的任务数量
 
-## 8.4 优先级耗时统计
+## 8.5 优先级耗时统计
 
 定义：
 
@@ -367,11 +482,12 @@
 
 - 便于后续扩展“高优任务时间是否被挤占”
 
-## 8.5 当前任务实时显示时间
+## 8.6 当前任务实时显示时间
 
 定义：
 
 - 若任务进行中，界面显示时间 = 历史累计时长 + 当前未结束时间段的实时差值
+- 若当前正在展示子任务，界面可显示子任务累计时长 + 子任务当前未结束时间段的实时差值
 
 注意：
 
@@ -391,6 +507,7 @@
 2. 若存在，按“异常结束”处理
 3. 默认将结束时间补为“本次启动时间”
 4. 任务状态改为 `Paused`
+5. 如果未结束时间段关联了子任务，对应子任务状态也改为 `Paused`
 
 说明：
 
@@ -442,18 +559,22 @@
 职责：
 
 - 创建任务
+- 创建子任务
 - 编辑任务
 - 查询任务列表
+- 查询子任务列表
 - 查询当前任务
 - 归档任务
 
 建议方法：
 
 - `CreateTask`
+- `CreateSubTask`
 - `UpdateTask`
 - `GetTaskById`
 - `GetActiveTask`
 - `GetTaskList`
+- `GetSubTasks`
 - `ArchiveTask`
 
 ### 10.2 TimerService
@@ -465,6 +586,10 @@
 - 恢复
 - 完成
 - 切换
+- 开始子任务
+- 暂停子任务
+- 恢复子任务
+- 完成子任务
 
 建议方法：
 
@@ -473,6 +598,10 @@
 - `ResumeTask`
 - `CompleteTask`
 - `SwitchTask`
+- `StartSubTask`
+- `PauseSubTask`
+- `ResumeSubTask`
+- `CompleteSubTask`
 
 ### 10.3 StatisticsService
 
@@ -480,12 +609,14 @@
 
 - 今日汇总
 - 任务时长统计
+- 子任务时长统计
 - 优先级统计
 
 建议方法：
 
 - `GetTodaySummary`
 - `GetTaskDuration`
+- `GetSubTaskDuration`
 - `GetTodayCompletedTasks`
 - `GetPrioritySummary`
 
@@ -509,6 +640,7 @@
 第一版建议至少包含：
 
 - `Tasks`
+- `SubTasks`
 - `TimeEntries`
 - `AppSettings`
 - `RuntimeState`
